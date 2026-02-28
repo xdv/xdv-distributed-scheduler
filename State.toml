@@ -1,0 +1,14 @@
+﻿# XDV Distributed Scheduler Workspace Manifest
+
+[workspace]
+name = "xdv_distributed_scheduler"
+version = "0.1.0"
+description = "Cluster-wide deterministic scheduling across hybrid domains."
+
+[sector]
+name = "xdv_distributed_scheduler"
+path = "src"
+
+[target.x64-pc-none]
+linker = "ld"
+linker_flags = ["-nostdlib", "-static"]
