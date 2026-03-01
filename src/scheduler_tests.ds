@@ -1,0 +1,203 @@
+// File: scheduler_tests.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: XDV-041 behavior tests.
+
+forge XdvDistributedSchedulerTests {
+
+    const TEST_PASS: UInt32 = 0;
+    const TEST_FAIL: UInt32 = 1;
+
+    const STATUS_OK: UInt32 = 0;
+
+    const DOMAIN_K: UInt64 = 0;
+    const DOMAIN_Q: UInt64 = 1;
+    const DOMAIN_PHI: UInt64 = 2;
+
+    const CAP_SCOPE_K: UInt64 = 1;
+    const CAP_SCOPE_Q: UInt64 = 2;
+    const CAP_SCOPE_PHI: UInt64 = 4;
+
+    const POLICY_BALANCED: UInt64 = 2;
+    const POLICY_PERFORMANCE: UInt64 = 3;
+
+    const FAILURE_UNREACHABLE: UInt64 = 1;
+    const FAILURE_REMOTE_Q: UInt64 = 2;
+    const FAILURE_REMOTE_PHI: UInt64 = 3;
+
+    proc K::expect_u32(actual: UInt32, expected: UInt32) {
+        if actual == expected {
+            return TEST_PASS;
+        } else {
+            return TEST_FAIL;
+        }
+    }
+
+    proc K::expect_u64(actual: UInt64, expected: UInt64) {
+        if actual == expected {
+            return TEST_PASS;
+        } else {
+            return TEST_FAIL;
+        }
+    }
+
+    proc K::combine(lhs: UInt32, rhs: UInt32) {
+        if lhs == TEST_PASS {
+            return rhs;
+        } else {
+            return TEST_FAIL;
+        }
+    }
+
+    proc K::test_global_logical_time_merge_and_placement() {
+        let k1 = XdvDistributedSchedulerGol::K::global_time_key(11, 2);
+        let k2 = XdvDistributedSchedulerGol::K::global_time_key(11, 3);
+        let merged = XdvDistributedSchedulerGol::K::global_time_merge_pair(11, 2, 11, 3);
+        let merged3 = XdvDistributedSchedulerGol::K::global_time_merge_three(11, 2, 11, 3, 9, 4);
+
+        let t1 = expect_u64(merged, k2);
+        let t2 = expect_u64(merged3, k2);
+
+        let placed = XdvDistributedSchedulerGol::K::place_process_two_nodes(DOMAIN_Q, CAP_SCOPE_Q, POLICY_PERFORMANCE, 20, 5, 4, 8, 2, 20, 6, 5, 8, 2);
+        let t3 = expect_u64(placed, 6);
+
+        let u1 = combine(t1, t2);
+        return combine(u1, t3);
+    }
+
+    proc K::test_deterministic_conflict_resolution() {
+        let winner_1 = XdvDistributedSchedulerDce::K::resolve_two_request_conflict(DOMAIN_K, CAP_SCOPE_K, POLICY_BALANCED, 7, 100, 31, POLICY_BALANCED, 6, 100, 31);
+        let winner_2 = XdvDistributedSchedulerDce::K::resolve_two_request_conflict(DOMAIN_K, CAP_SCOPE_K, POLICY_BALANCED, 7, 100, 31, POLICY_BALANCED, 6, 100, 31);
+        let decision = XdvDistributedSchedulerDce::K::resolve_and_record(DOMAIN_K, CAP_SCOPE_K, POLICY_BALANCED, 7, 100, 31, POLICY_BALANCED, 6, 100, 31, 9, 1);
+
+        let t1 = expect_u64(winner_1, 6);
+        let t2 = expect_u64(winner_2, 6);
+
+        if decision == 0 {
+            return TEST_FAIL;
+        } else {
+            let u1 = combine(t1, t2);
+            return u1;
+        }
+    }
+
+    proc K::test_rdap_signed_contract_and_order() {
+        let token = XdvDistributedSchedulerRdap::K::build_contract_token(1, 4, 8, DOMAIN_Q, 12, 5, CAP_SCOPE_Q, 77);
+        let sig = XdvDistributedSchedulerRdap::K::contract_signature(token, 909);
+        let verify = XdvDistributedSchedulerRdap::K::verify_contract_signature(token, sig, 909);
+        let key = XdvDistributedSchedulerRdap::K::contract_order_key(77, 4, 1);
+        let signed = XdvDistributedSchedulerRdap::K::create_signed_contract(1, 4, 8, DOMAIN_Q, 12, 5, CAP_SCOPE_Q, 77, 909);
+
+        let t1 = expect_u32(verify, STATUS_OK);
+        if key == 0 {
+            return TEST_FAIL;
+        } else {
+            if signed == 0 {
+                return TEST_FAIL;
+            } else {
+                return t1;
+            }
+        }
+    }
+
+    proc K::test_multi_node_failure_recovery() {
+        let suspended = XdvDistributedSchedulerRecovery::K::suspend_contract(11, 2, 90);
+        if suspended == 0 {
+            return TEST_FAIL;
+        } else {
+            let recovered = XdvDistributedSchedulerRecovery::K::recover_multi_node_failure(
+                DOMAIN_PHI,
+                CAP_SCOPE_PHI,
+                POLICY_PERFORMANCE,
+                2,
+                3,
+                91,
+                5,
+                3,
+                2,
+                9,
+                92,
+                6,
+                2,
+                2,
+                8,
+                1
+            );
+            if recovered == 0 {
+                return TEST_FAIL;
+            } else {
+                if recovered == 5 {
+                    return TEST_PASS;
+                } else {
+                    if recovered == 6 {
+                        return TEST_PASS;
+                    } else {
+                        return TEST_FAIL;
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::test_failure_recovery_by_code() {
+        let q_recover = XdvDistributedSchedulerRecovery::K::recover_with_failure_code(
+            DOMAIN_Q,
+            CAP_SCOPE_Q,
+            POLICY_BALANCED,
+            4,
+            FAILURE_REMOTE_Q,
+            101,
+            8,
+            5,
+            7,
+            2,
+            102,
+            9,
+            5,
+            8,
+            2
+        );
+
+        let phi_recover = XdvDistributedSchedulerRecovery::K::recover_with_failure_code(
+            DOMAIN_PHI,
+            CAP_SCOPE_PHI,
+            POLICY_BALANCED,
+            4,
+            FAILURE_REMOTE_PHI,
+            103,
+            10,
+            5,
+            2,
+            8,
+            104,
+            11,
+            5,
+            2,
+            7
+        );
+
+        let base_event = XdvDistributedSchedulerRecovery::K::failure_event_key(105, 4, FAILURE_UNREACHABLE);
+
+        if base_event == 0 {
+            return TEST_FAIL;
+        } else {
+            if q_recover == 0 {
+                return TEST_FAIL;
+            } else {
+                if phi_recover == 0 {
+                    return TEST_FAIL;
+                } else {
+                    return TEST_PASS;
+                }
+            }
+        }
+    }
+
+    proc K::run_all_tests() {
+        let t1 = test_global_logical_time_merge_and_placement();
+        let t2 = combine(t1, test_deterministic_conflict_resolution());
+        let t3 = combine(t2, test_rdap_signed_contract_and_order());
+        let t4 = combine(t3, test_multi_node_failure_recovery());
+        return combine(t4, test_failure_recovery_by_code());
+    }
+}

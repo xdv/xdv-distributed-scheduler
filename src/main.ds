@@ -1,2 +1,74 @@
-﻿# XDV Distributed Scheduler bootstrap surface
-# TODO: implement module entrypoint
+// File: main.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: top-level entrypoints for XDV-041.
+
+forge XdvDistributedSchedulerMain {
+
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_BOOTSTRAP_FAILED: UInt32 = 1;
+
+    const DOMAIN_K: UInt64 = 0;
+    const CAP_SCOPE_K: UInt64 = 1;
+    const POLICY_BALANCED: UInt64 = 2;
+
+    proc K::startup_contract_validation() {
+        let d = XdvDistributedSchedulerContracts::K::is_domain_valid(DOMAIN_K);
+        if d == STATUS_OK {
+            let c = XdvDistributedSchedulerContracts::K::is_capability_valid_for_domain(DOMAIN_K, CAP_SCOPE_K);
+            if c == STATUS_OK {
+                let p = XdvDistributedSchedulerContracts::K::is_policy_valid(POLICY_BALANCED);
+                if p == STATUS_OK {
+                    return STATUS_OK;
+                } else {
+                    return STATUS_BOOTSTRAP_FAILED;
+                }
+            } else {
+                return STATUS_BOOTSTRAP_FAILED;
+            }
+        } else {
+            return STATUS_BOOTSTRAP_FAILED;
+        }
+    }
+
+    proc K::scheduler_smoke_placement() {
+        let node = XdvDistributedSchedulerGol::K::place_process_two_nodes(
+            DOMAIN_K,
+            CAP_SCOPE_K,
+            POLICY_BALANCED,
+            10,
+            2,
+            6,
+            1,
+            1,
+            10,
+            3,
+            6,
+            1,
+            1
+        );
+        if node == 0 {
+            return STATUS_BOOTSTRAP_FAILED;
+        } else {
+            return STATUS_OK;
+        }
+    }
+
+    proc K::run_self_tests() {
+        return XdvDistributedSchedulerTests::K::run_all_tests();
+    }
+
+    proc K::bootstrap() {
+        let startup = startup_contract_validation();
+        if startup == STATUS_OK {
+            let smoke = scheduler_smoke_placement();
+            if smoke == STATUS_OK {
+                return STATUS_OK;
+            } else {
+                return STATUS_BOOTSTRAP_FAILED;
+            }
+        } else {
+            return STATUS_BOOTSTRAP_FAILED;
+        }
+    }
+}

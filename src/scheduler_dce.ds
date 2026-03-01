@@ -1,0 +1,120 @@
+// File: scheduler_dce.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: Deterministic Coordination Engine (DCE)
+//   Implements deterministic conflict resolution and decision recording.
+
+forge XdvDistributedSchedulerDce {
+
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_CONFLICT_UNRESOLVED: UInt32 = 1;
+
+    const DECISION_LEFT: UInt64 = 1;
+    const DECISION_RIGHT: UInt64 = 2;
+
+    proc K::request_order_key(policy: UInt64, logical_time: UInt64, node_id: UInt64, request_id: UInt64) {
+        let policy_weight = XdvDistributedSchedulerContracts::K::policy_priority_weight(policy);
+        if policy_weight == 0 {
+            return 0;
+        } else {
+            let node_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(node_id);
+            if node_valid == STATUS_OK {
+                if request_id > 9999 {
+                    return 0;
+                } else {
+                    if logical_time > 999999 {
+                        return 0;
+                    } else {
+                        return (policy_weight * 1000000000000) + ((999999 - logical_time) * 1000000) + ((1000 - node_id) * 10000) + (9999 - request_id);
+                    }
+                }
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::validate_conflict_request(domain: UInt64, capability_scope: UInt64, policy: UInt64, node_id: UInt64) {
+        let domain_valid = XdvDistributedSchedulerContracts::K::is_domain_valid(domain);
+        if domain_valid == STATUS_OK {
+            let cap_valid = XdvDistributedSchedulerContracts::K::is_capability_valid_for_domain(domain, capability_scope);
+            if cap_valid == STATUS_OK {
+                let policy_valid = XdvDistributedSchedulerContracts::K::is_policy_valid(policy);
+                if policy_valid == STATUS_OK {
+                    return XdvDistributedSchedulerContracts::K::is_node_id_valid(node_id);
+                } else {
+                    return policy_valid;
+                }
+            } else {
+                return cap_valid;
+            }
+        } else {
+            return domain_valid;
+        }
+    }
+
+    proc K::resolve_two_request_conflict(domain: UInt64, capability_scope: UInt64, left_policy: UInt64, left_node: UInt64, left_logical_time: UInt64, left_request_id: UInt64, right_policy: UInt64, right_node: UInt64, right_logical_time: UInt64, right_request_id: UInt64) {
+        let left_valid = validate_conflict_request(domain, capability_scope, left_policy, left_node);
+        if left_valid == STATUS_OK {
+            let right_valid = validate_conflict_request(domain, capability_scope, right_policy, right_node);
+            if right_valid == STATUS_OK {
+                let left_key = request_order_key(left_policy, left_logical_time, left_node, left_request_id);
+                let right_key = request_order_key(right_policy, right_logical_time, right_node, right_request_id);
+                if left_key == 0 {
+                    if right_key == 0 {
+                        return 0;
+                    } else {
+                        return right_node;
+                    }
+                } else {
+                    if right_key == 0 {
+                        return left_node;
+                    } else {
+                        if left_key > right_key {
+                            return left_node;
+                        } else {
+                            if right_key > left_key {
+                                return right_node;
+                            } else {
+                                if left_node < right_node {
+                                    return left_node;
+                                } else {
+                                    return right_node;
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::decision_token(winner_node: UInt64, loser_node: UInt64, resource_id: UInt64, logical_time: UInt64, decision_sequence: UInt64) {
+        if winner_node == 0 {
+            return 0;
+        } else {
+            if loser_node == 0 {
+                return 0;
+            } else {
+                return (winner_node * 1000000000000) + (loser_node * 1000000000) + (resource_id * 1000000) + (logical_time * 100) + decision_sequence;
+            }
+        }
+    }
+
+    proc K::resolve_and_record(domain: UInt64, capability_scope: UInt64, left_policy: UInt64, left_node: UInt64, left_logical_time: UInt64, left_request_id: UInt64, right_policy: UInt64, right_node: UInt64, right_logical_time: UInt64, right_request_id: UInt64, resource_id: UInt64, decision_sequence: UInt64) {
+        let winner = resolve_two_request_conflict(domain, capability_scope, left_policy, left_node, left_logical_time, left_request_id, right_policy, right_node, right_logical_time, right_request_id);
+        if winner == 0 {
+            return 0;
+        } else {
+            if winner == left_node {
+                return decision_token(left_node, right_node, resource_id, left_logical_time, decision_sequence);
+            } else {
+                return decision_token(right_node, left_node, resource_id, right_logical_time, decision_sequence);
+            }
+        }
+    }
+}

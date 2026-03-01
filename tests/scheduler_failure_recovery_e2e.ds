@@ -1,0 +1,10 @@
+// File: scheduler_failure_recovery_e2e.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: aggregate test entrypoint.
+
+forge XdvDistributedSchedulerE2E {
+    proc K::run_all_tests() {
+        return XdvDistributedSchedulerTests::K::run_all_tests();
+    }
+}

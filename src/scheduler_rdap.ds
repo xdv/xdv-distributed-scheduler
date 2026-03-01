@@ -1,0 +1,93 @@
+// File: scheduler_rdap.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: Remote Domain Allocation Protocol (RDAP)
+//   Implements deterministic contract packing, signing marker, and ordering.
+
+forge XdvDistributedSchedulerRdap {
+
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INVALID_CONTRACT: UInt32 = 1;
+    const STATUS_SIGNATURE_INVALID: UInt32 = 2;
+
+    proc K::build_contract_token(contract_id: UInt64, requesting_node: UInt64, target_node: UInt64, domain: UInt64, resource_set: UInt64, duration: UInt64, capability_scope: UInt64, logical_timestamp: UInt64) {
+        if contract_id == 0 {
+            return 0;
+        } else {
+            let req_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(requesting_node);
+            if req_valid == STATUS_OK {
+                let target_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(target_node);
+                if target_valid == STATUS_OK {
+                    let domain_valid = XdvDistributedSchedulerContracts::K::is_domain_valid(domain);
+                    if domain_valid == STATUS_OK {
+                        let cap_valid = XdvDistributedSchedulerContracts::K::is_capability_valid_for_domain(domain, capability_scope);
+                        if cap_valid == STATUS_OK {
+                            if duration == 0 {
+                                return 0;
+                            } else {
+                                return (contract_id * 1000000000000000) + (requesting_node * 1000000000000) + (target_node * 1000000000) + (domain * 100000000) + (resource_set * 1000000) + (duration * 1000) + logical_timestamp;
+                            }
+                        } else {
+                            return 0;
+                        }
+                    } else {
+                        return 0;
+                    }
+                } else {
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::contract_signature(contract_token: UInt64, signing_key: UInt64) {
+        if contract_token == 0 {
+            return 0;
+        } else {
+            if signing_key == 0 {
+                return 0;
+            } else {
+                let mixed = (contract_token * 97) + (signing_key * 193) + 4099;
+                return mixed - ((mixed / 1000000) * 1000000);
+            }
+        }
+    }
+
+    proc K::verify_contract_signature(contract_token: UInt64, signature: UInt64, signing_key: UInt64) {
+        if contract_token == 0 {
+            return STATUS_INVALID_CONTRACT;
+        } else {
+            let expected = contract_signature(contract_token, signing_key);
+            if expected == signature {
+                return STATUS_OK;
+            } else {
+                return STATUS_SIGNATURE_INVALID;
+            }
+        }
+    }
+
+    proc K::contract_order_key(logical_timestamp: UInt64, requesting_node: UInt64, contract_id: UInt64) {
+        let node_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(requesting_node);
+        if node_valid == STATUS_OK {
+            return (logical_timestamp * 1000000) + (requesting_node * 1000) + contract_id;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::create_signed_contract(contract_id: UInt64, requesting_node: UInt64, target_node: UInt64, domain: UInt64, resource_set: UInt64, duration: UInt64, capability_scope: UInt64, logical_timestamp: UInt64, signing_key: UInt64) {
+        let token = build_contract_token(contract_id, requesting_node, target_node, domain, resource_set, duration, capability_scope, logical_timestamp);
+        if token == 0 {
+            return 0;
+        } else {
+            let sig = contract_signature(token, signing_key);
+            if sig == 0 {
+                return 0;
+            } else {
+                return (token * 1000000) + sig;
+            }
+        }
+    }
+}

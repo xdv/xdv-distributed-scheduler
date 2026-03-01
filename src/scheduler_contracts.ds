@@ -1,0 +1,141 @@
+// File: scheduler_contracts.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: XDV-041 contract constants and validators.
+
+forge XdvDistributedSchedulerContracts {
+
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_INVALID_DOMAIN: UInt32 = 1;
+    const STATUS_INVALID_CAPABILITY: UInt32 = 2;
+    const STATUS_INVALID_POLICY: UInt32 = 3;
+    const STATUS_INVALID_NODE: UInt32 = 4;
+
+    const DOMAIN_K: UInt64 = 0;
+    const DOMAIN_Q: UInt64 = 1;
+    const DOMAIN_PHI: UInt64 = 2;
+
+    const CAP_SCOPE_K: UInt64 = 1;
+    const CAP_SCOPE_Q: UInt64 = 2;
+    const CAP_SCOPE_PHI: UInt64 = 4;
+
+    const POLICY_CONSERVATIVE: UInt64 = 1;
+    const POLICY_BALANCED: UInt64 = 2;
+    const POLICY_PERFORMANCE: UInt64 = 3;
+    const POLICY_RECOVERY_FIRST: UInt64 = 4;
+
+    const NODE_ID_MIN: UInt64 = 1;
+    const NODE_ID_MAX: UInt64 = 999;
+
+    proc K::is_domain_valid(domain: UInt64) {
+        if domain == DOMAIN_K {
+            return STATUS_OK;
+        } else {
+            if domain == DOMAIN_Q {
+                return STATUS_OK;
+            } else {
+                if domain == DOMAIN_PHI {
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INVALID_DOMAIN;
+                }
+            }
+        }
+    }
+
+    proc K::is_capability_valid_for_domain(domain: UInt64, capability_scope: UInt64) {
+        if domain == DOMAIN_K {
+            if capability_scope == CAP_SCOPE_K {
+                return STATUS_OK;
+            } else {
+                return STATUS_INVALID_CAPABILITY;
+            }
+        } else {
+            if domain == DOMAIN_Q {
+                if capability_scope == CAP_SCOPE_Q {
+                    return STATUS_OK;
+                } else {
+                    return STATUS_INVALID_CAPABILITY;
+                }
+            } else {
+                if domain == DOMAIN_PHI {
+                    if capability_scope == CAP_SCOPE_PHI {
+                        return STATUS_OK;
+                    } else {
+                        return STATUS_INVALID_CAPABILITY;
+                    }
+                } else {
+                    return STATUS_INVALID_DOMAIN;
+                }
+            }
+        }
+    }
+
+    proc K::is_policy_valid(policy: UInt64) {
+        if policy == POLICY_CONSERVATIVE {
+            return STATUS_OK;
+        } else {
+            if policy == POLICY_BALANCED {
+                return STATUS_OK;
+            } else {
+                if policy == POLICY_PERFORMANCE {
+                    return STATUS_OK;
+                } else {
+                    if policy == POLICY_RECOVERY_FIRST {
+                        return STATUS_OK;
+                    } else {
+                        return STATUS_INVALID_POLICY;
+                    }
+                }
+            }
+        }
+    }
+
+    proc K::is_node_id_valid(node_id: UInt64) {
+        if node_id < NODE_ID_MIN {
+            return STATUS_INVALID_NODE;
+        } else {
+            if node_id > NODE_ID_MAX {
+                return STATUS_INVALID_NODE;
+            } else {
+                return STATUS_OK;
+            }
+        }
+    }
+
+    proc K::domain_resource_weight(domain: UInt64) {
+        if domain == DOMAIN_K {
+            return 1;
+        } else {
+            if domain == DOMAIN_Q {
+                return 3;
+            } else {
+                if domain == DOMAIN_PHI {
+                    return 4;
+                } else {
+                    return 0;
+                }
+            }
+        }
+    }
+
+    proc K::policy_priority_weight(policy: UInt64) {
+        if policy == POLICY_CONSERVATIVE {
+            return 2;
+        } else {
+            if policy == POLICY_BALANCED {
+                return 3;
+            } else {
+                if policy == POLICY_PERFORMANCE {
+                    return 4;
+                } else {
+                    if policy == POLICY_RECOVERY_FIRST {
+                        return 5;
+                    } else {
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
+}

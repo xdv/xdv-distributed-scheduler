@@ -1,78 +1,58 @@
-﻿# XDV Distributed Scheduler
+# XDV Distributed Scheduler
 
 Version: 0.1.0
-Status: planned
+Status: active
 Language: Dust Programming Language (DPL)
 
 ## Specification Alignment
 
-Primary specification: XDV-041 in xdv-spec.
+Primary specification: XDV-041 in `xdv-spec`.
 
-## Purpose
+Implemented focus for this milestone:
 
-Cluster-wide deterministic scheduling across hybrid domains.
+1. Global logical-time merge and placement.
+2. Deterministic conflict resolution.
+3. Multi-node failure recovery tests.
 
-## Scope
+## Modules
 
-This project is responsible for:
+- `src/scheduler_contracts.ds`
+  Normative constants and validation for domain/capability/policy/node constraints.
 
-- Implementing normative requirements defined by XDV-041.
-- Publishing deterministic behavior contracts for integration with xdv-os.
-- Providing reusable modules for cross-repo integration.
-- Supplying verification and conformance fixtures for regression control.
+- `src/scheduler_gol.ds`
+  Global Orchestration Layer (GOL): logical-time merge and deterministic placement.
 
-## Planned Deliverables
+- `src/scheduler_dce.ds`
+  Deterministic Coordination Engine (DCE): canonical conflict arbitration and decision tokening.
 
-- gol, dce, rdap
-- Public APIs in src/
-- Test fixtures in tests/
-- Design and interface docs in docs/
+- `src/scheduler_rdap.ds`
+  Remote Domain Allocation Protocol (RDAP): contract packing, signature marker, ordering key.
 
-## Repository Layout
+- `src/scheduler_recovery.ds`
+  Deterministic node-failure recovery and reallocation policies.
 
-- src/ : core module implementations.
-- tests/ : deterministic unit/integration/conformance fixtures.
-- docs/ : architecture, protocol, and usage documentation.
-- State.toml : workspace manifest.
-- changelog.md : release and milestone notes.
+- `src/scheduler_tests.ds`
+  Scheduler behavior tests for XDV-041 requirements.
 
-## Initial Module Plan
-
-- src/main.ds: project entrypoint and top-level orchestration.
-- src/contracts.ds: normative contract models and validators.
-- src/protocol.ds: wire/protocol semantics for external interfaces.
-- src/errors.ds: canonical error model and deterministic mapping.
-- src/tests.ds: local test harness entry surface.
-
-## Dependencies
-
-Current planned dependencies:
-
-- xdv-network, xdv-kernel, xdv-runtime, xdv-consensus
-- dust runtime/toolchain packages as required by integration profile
-
-## Integration Contracts
-
-- Must preserve deterministic ordering semantics.
-- Must avoid implicit cross-domain state mutation.
-- Must emit structured metadata for replay and audit paths.
-- Must remain compatible with xdv-os build and boot/runtime contracts.
+- `src/main.ds`
+  Bootstrap/startup validation and smoke entrypoints.
 
 ## Build
 
+```bash
 dust check xdv-distributed-scheduler/src
+```
 
 ## Test
 
-dust test xdv-distributed-scheduler/tests
-
-## Milestones
-
-1. M1: scaffold + contract models.
-2. M2: core pipeline implementation.
-3. M3: deterministic behavior and fixture hardening.
-4. M4: xdv-os integration and conformance gating.
+```bash
+dust check xdv-distributed-scheduler/src/scheduler_tests.ds
+dust check xdv-distributed-scheduler/tests/scheduler_failure_recovery_e2e.ds
+```
 
 ## Notes
 
-This project is initialized as a skeleton template and intentionally starts with minimal source implementation.
+- Logical-time merge is deterministic and Node_ID-stable.
+- Placement decisions are replay-stable with deterministic tie-break rules.
+- Conflict resolution is canonicalized and reproducible.
+- Failure recovery remains deterministic under single-node and multi-node failures.

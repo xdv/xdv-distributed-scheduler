@@ -1,0 +1,164 @@
+// File: scheduler_gol.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: Global Orchestration Layer (GOL)
+//   Implements deterministic logical-time merge and placement.
+
+forge XdvDistributedSchedulerGol {
+
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_MERGE_FAILED: UInt32 = 1;
+    const STATUS_PLACEMENT_FAILED: UInt32 = 2;
+
+    const FACTOR_NODE: UInt64 = 1000;
+    const FACTOR_EPOCH: UInt64 = 1000000;
+
+    const DOMAIN_K: UInt64 = 0;
+    const DOMAIN_Q: UInt64 = 1;
+    const DOMAIN_PHI: UInt64 = 2;
+
+    proc K::global_time_key(local_logical_time: UInt64, node_id: UInt64) {
+        if local_logical_time > 999999 {
+            return 0;
+        } else {
+            let node_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(node_id);
+            if node_valid == STATUS_OK {
+                return (local_logical_time * FACTOR_NODE) + node_id;
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::global_time_merge_pair(local_a: UInt64, node_a: UInt64, local_b: UInt64, node_b: UInt64) {
+        let key_a = global_time_key(local_a, node_a);
+        let key_b = global_time_key(local_b, node_b);
+        if key_a == 0 {
+            return 0;
+        } else {
+            if key_b == 0 {
+                return 0;
+            } else {
+                if key_a > key_b {
+                    return key_a;
+                } else {
+                    return key_b;
+                }
+            }
+        }
+    }
+
+    proc K::global_time_merge_three(local_a: UInt64, node_a: UInt64, local_b: UInt64, node_b: UInt64, local_c: UInt64, node_c: UInt64) {
+        let pair = global_time_merge_pair(local_a, node_a, local_b, node_b);
+        if pair == 0 {
+            return 0;
+        } else {
+            let key_c = global_time_key(local_c, node_c);
+            if key_c == 0 {
+                return 0;
+            } else {
+                if pair > key_c {
+                    return pair;
+                } else {
+                    return key_c;
+                }
+            }
+        }
+    }
+
+    proc K::global_logical_time_reconcile(cluster_epoch: UInt64, local_logical_time: UInt64, node_id: UInt64) {
+        let key = global_time_key(local_logical_time, node_id);
+        if key == 0 {
+            return 0;
+        } else {
+            if cluster_epoch > 999 {
+                return 0;
+            } else {
+                return (cluster_epoch * FACTOR_EPOCH) + key;
+            }
+        }
+    }
+
+    proc K::domain_available_capacity(domain: UInt64, node_k_capacity: UInt64, node_q_capacity: UInt64, node_phi_capacity: UInt64) {
+        if domain == DOMAIN_K {
+            return node_k_capacity;
+        } else {
+            if domain == DOMAIN_Q {
+                return node_q_capacity;
+            } else {
+                if domain == DOMAIN_PHI {
+                    return node_phi_capacity;
+                } else {
+                    return 0;
+                }
+            }
+        }
+    }
+
+    proc K::placement_score(domain: UInt64, capability_scope: UInt64, policy: UInt64, local_logical_time: UInt64, node_id: UInt64, node_k_capacity: UInt64, node_q_capacity: UInt64, node_phi_capacity: UInt64) {
+        let domain_valid = XdvDistributedSchedulerContracts::K::is_domain_valid(domain);
+        if domain_valid == STATUS_OK {
+            let cap_valid = XdvDistributedSchedulerContracts::K::is_capability_valid_for_domain(domain, capability_scope);
+            if cap_valid == STATUS_OK {
+                let policy_valid = XdvDistributedSchedulerContracts::K::is_policy_valid(policy);
+                if policy_valid == STATUS_OK {
+                    let node_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(node_id);
+                    if node_valid == STATUS_OK {
+                        let cap = domain_available_capacity(domain, node_k_capacity, node_q_capacity, node_phi_capacity);
+                        if cap == 0 {
+                            return 0;
+                        } else {
+                            let priority_weight = XdvDistributedSchedulerContracts::K::policy_priority_weight(policy);
+                            let domain_weight = XdvDistributedSchedulerContracts::K::domain_resource_weight(domain);
+                            let logical_key = global_time_key(local_logical_time, node_id);
+                            if logical_key == 0 {
+                                return 0;
+                            } else {
+                                return (priority_weight * 1000000000000) + (domain_weight * 1000000000) + (cap * 1000000) + logical_key;
+                            }
+                        }
+                    } else {
+                        return 0;
+                    }
+                } else {
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::place_process_two_nodes(domain: UInt64, capability_scope: UInt64, policy: UInt64, local_time_a: UInt64, node_a: UInt64, k_a: UInt64, q_a: UInt64, phi_a: UInt64, local_time_b: UInt64, node_b: UInt64, k_b: UInt64, q_b: UInt64, phi_b: UInt64) {
+        let score_a = placement_score(domain, capability_scope, policy, local_time_a, node_a, k_a, q_a, phi_a);
+        let score_b = placement_score(domain, capability_scope, policy, local_time_b, node_b, k_b, q_b, phi_b);
+
+        if score_a == 0 {
+            if score_b == 0 {
+                return 0;
+            } else {
+                return node_b;
+            }
+        } else {
+            if score_b == 0 {
+                return node_a;
+            } else {
+                if score_a > score_b {
+                    return node_a;
+                } else {
+                    if score_b > score_a {
+                        return node_b;
+                    } else {
+                        if node_a < node_b {
+                            return node_a;
+                        } else {
+                            return node_b;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

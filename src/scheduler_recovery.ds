@@ -1,0 +1,142 @@
+// File: scheduler_recovery.ds - This file is part of XDV
+// Copyright (c) 2026 Dust LLC, and Contributors
+// Description:
+//   xdv-distributed-scheduler: deterministic multi-node failure recovery policy.
+
+forge XdvDistributedSchedulerRecovery {
+
+    const STATUS_OK: UInt32 = 0;
+    const STATUS_RECOVERY_FAILED: UInt32 = 1;
+
+    const FAILURE_UNREACHABLE: UInt64 = 1;
+    const FAILURE_REMOTE_Q: UInt64 = 2;
+    const FAILURE_REMOTE_PHI: UInt64 = 3;
+
+    const ACTION_SUSPEND_ONLY: UInt64 = 1;
+    const ACTION_SUSPEND_AND_REALLOCATE: UInt64 = 2;
+
+    const POLICY_RECOVERY_FIRST: UInt64 = 4;
+
+    proc K::failure_event_key(logical_timestamp: UInt64, failed_node: UInt64, failure_code: UInt64) {
+        let node_valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(failed_node);
+        if node_valid == STATUS_OK {
+            return (logical_timestamp * 1000000) + (failed_node * 1000) + failure_code;
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::suspend_contract(contract_id: UInt64, failed_node: UInt64, logical_timestamp: UInt64) {
+        if contract_id == 0 {
+            return 0;
+        } else {
+            let event = failure_event_key(logical_timestamp, failed_node, FAILURE_UNREACHABLE);
+            if event == 0 {
+                return 0;
+            } else {
+                return (contract_id * 1000000000) + event;
+            }
+        }
+    }
+
+    proc K::recovery_action(policy: UInt64, allow_reallocate: UInt64) {
+        let policy_valid = XdvDistributedSchedulerContracts::K::is_policy_valid(policy);
+        if policy_valid == STATUS_OK {
+            if allow_reallocate == 1 {
+                return ACTION_SUSPEND_AND_REALLOCATE;
+            } else {
+                return ACTION_SUSPEND_ONLY;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::is_candidate_available(candidate_node: UInt64, failed_a: UInt64, failed_b: UInt64) {
+        let valid = XdvDistributedSchedulerContracts::K::is_node_id_valid(candidate_node);
+        if valid == STATUS_OK {
+            if candidate_node == failed_a {
+                return 0;
+            } else {
+                if candidate_node == failed_b {
+                    return 0;
+                } else {
+                    return 1;
+                }
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    proc K::recover_single_failure(domain: UInt64, capability_scope: UInt64, policy: UInt64, failed_node: UInt64, local_time_candidate_a: UInt64, candidate_a: UInt64, k_a: UInt64, q_a: UInt64, phi_a: UInt64, local_time_candidate_b: UInt64, candidate_b: UInt64, k_b: UInt64, q_b: UInt64, phi_b: UInt64, allow_reallocate: UInt64) {
+        let action = recovery_action(policy, allow_reallocate);
+        if action == ACTION_SUSPEND_ONLY {
+            return 0;
+        } else {
+            if action == ACTION_SUSPEND_AND_REALLOCATE {
+                let avail_a = is_candidate_available(candidate_a, failed_node, 0);
+                let avail_b = is_candidate_available(candidate_b, failed_node, 0);
+                if avail_a == 0 {
+                    if avail_b == 0 {
+                        return 0;
+                    } else {
+                        return candidate_b;
+                    }
+                } else {
+                    if avail_b == 0 {
+                        return candidate_a;
+                    } else {
+                        return XdvDistributedSchedulerGol::K::place_process_two_nodes(domain, capability_scope, policy, local_time_candidate_a, candidate_a, k_a, q_a, phi_a, local_time_candidate_b, candidate_b, k_b, q_b, phi_b);
+                    }
+                }
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::recover_multi_node_failure(domain: UInt64, capability_scope: UInt64, policy: UInt64, failed_node_a: UInt64, failed_node_b: UInt64, local_time_candidate_a: UInt64, candidate_a: UInt64, k_a: UInt64, q_a: UInt64, phi_a: UInt64, local_time_candidate_b: UInt64, candidate_b: UInt64, k_b: UInt64, q_b: UInt64, phi_b: UInt64, allow_reallocate: UInt64) {
+        let action = recovery_action(policy, allow_reallocate);
+        if action == ACTION_SUSPEND_ONLY {
+            return 0;
+        } else {
+            if action == ACTION_SUSPEND_AND_REALLOCATE {
+                let avail_a = is_candidate_available(candidate_a, failed_node_a, failed_node_b);
+                let avail_b = is_candidate_available(candidate_b, failed_node_a, failed_node_b);
+                if avail_a == 0 {
+                    if avail_b == 0 {
+                        return 0;
+                    } else {
+                        return candidate_b;
+                    }
+                } else {
+                    if avail_b == 0 {
+                        return candidate_a;
+                    } else {
+                        return XdvDistributedSchedulerGol::K::place_process_two_nodes(domain, capability_scope, policy, local_time_candidate_a, candidate_a, k_a, q_a, phi_a, local_time_candidate_b, candidate_b, k_b, q_b, phi_b);
+                    }
+                }
+            } else {
+                return 0;
+            }
+        }
+    }
+
+    proc K::recover_with_failure_code(domain: UInt64, capability_scope: UInt64, policy: UInt64, failed_node: UInt64, failure_code: UInt64, local_time_candidate_a: UInt64, candidate_a: UInt64, k_a: UInt64, q_a: UInt64, phi_a: UInt64, local_time_candidate_b: UInt64, candidate_b: UInt64, k_b: UInt64, q_b: UInt64, phi_b: UInt64) {
+        let event = failure_event_key(local_time_candidate_a + local_time_candidate_b, failed_node, failure_code);
+        if event == 0 {
+            return 0;
+        } else {
+            if failure_code == FAILURE_REMOTE_Q {
+                return recover_single_failure(domain, capability_scope, POLICY_RECOVERY_FIRST, failed_node, local_time_candidate_a, candidate_a, k_a, q_a, phi_a, local_time_candidate_b, candidate_b, k_b, q_b, phi_b, 1);
+            } else {
+                if failure_code == FAILURE_REMOTE_PHI {
+                    return recover_single_failure(domain, capability_scope, POLICY_RECOVERY_FIRST, failed_node, local_time_candidate_a, candidate_a, k_a, q_a, phi_a, local_time_candidate_b, candidate_b, k_b, q_b, phi_b, 1);
+                } else {
+                    return recover_single_failure(domain, capability_scope, policy, failed_node, local_time_candidate_a, candidate_a, k_a, q_a, phi_a, local_time_candidate_b, candidate_b, k_b, q_b, phi_b, 1);
+                }
+            }
+        }
+    }
+}
